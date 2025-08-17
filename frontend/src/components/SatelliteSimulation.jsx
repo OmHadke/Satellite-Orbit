@@ -390,7 +390,7 @@ const SatelliteSimulation = () => {
               </label>
               <Slider
                 value={[customParams.altitude]}
-                onValueChange={(value) => setCustomParams(prev => ({ ...prev, altitude: value[0] }))}
+                onValueChange={(value) => handleParameterChange('altitude', value[0])}
                 max={35786}
                 min={200}
                 step={10}
@@ -404,7 +404,7 @@ const SatelliteSimulation = () => {
               </label>
               <Slider
                 value={[customParams.inclination]}
-                onValueChange={(value) => setCustomParams(prev => ({ ...prev, inclination: value[0] }))}
+                onValueChange={(value) => handleParameterChange('inclination', value[0])}
                 max={180}
                 min={0}
                 step={1}
@@ -418,13 +418,23 @@ const SatelliteSimulation = () => {
               </label>
               <Slider
                 value={[customParams.eccentricity]}
-                onValueChange={(value) => setCustomParams(prev => ({ ...prev, eccentricity: value[0] }))}
+                onValueChange={(value) => handleParameterChange('eccentricity', value[0])}
                 max={0.5}
                 min={0}
                 step={0.001}
                 className="w-full"
               />
             </div>
+
+            <Button
+              onClick={handleSaveConfiguration}
+              variant="outline"
+              size="sm"
+              className="w-full mt-4 bg-green-600/20 border-green-600 text-green-400 hover:bg-green-600/30"
+            >
+              <Save className="w-4 h-4 mr-2" />
+              Save Configuration
+            </Button>
           </div>
         </Card>
       </div>
