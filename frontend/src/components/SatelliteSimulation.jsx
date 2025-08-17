@@ -201,6 +201,34 @@ const SatelliteSimulation = () => {
     });
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+        <Card className="p-8 bg-black/40 backdrop-blur-md border-gray-600">
+          <div className="text-white text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+            <p>Loading satellite data...</p>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+        <Card className="p-8 bg-black/40 backdrop-blur-md border-gray-600">
+          <div className="text-white text-center">
+            <p className="text-red-400 mb-4">{error}</p>
+            <Button onClick={loadSatellites} className="bg-blue-600 hover:bg-blue-700">
+              Retry Loading
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
       {/* Header */}
