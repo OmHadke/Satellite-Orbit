@@ -26,7 +26,7 @@ class SatelliteUpdate(BaseModel):
 
 class Satellite(SatelliteBase):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    period: float  # calculated field in minutes
+    period: float = 0.0  # calculated field in minutes, default to 0
     created_at: datetime = Field(default_factory=datetime.utcnow)
     custom_params: Dict[str, Any] = Field(default_factory=dict)
 
