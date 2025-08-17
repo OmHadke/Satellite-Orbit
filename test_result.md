@@ -336,7 +336,12 @@ metadata:
 
 test_plan:
   current_focus:
-    - "All backend endpoints tested and working"
+    - "3D Visualization & Scene Rendering"
+    - "Simulation Controls Panel"
+    - "Satellite Selection Panel"
+    - "Orbital Parameters Panel"
+    - "Backend Integration & Data Loading"
+    - "Interactive 3D Elements"
   stuck_tasks: []
   test_all: true
   test_priority: "high_first"
