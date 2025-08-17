@@ -350,7 +350,7 @@ const SatelliteSimulation = () => {
               <SelectValue placeholder="Select a satellite" />
             </SelectTrigger>
             <SelectContent className="bg-gray-800 border-gray-600">
-              {mockSatellites.map((satellite) => (
+              {satellites.map((satellite) => (
                 <SelectItem 
                   key={satellite.id} 
                   value={satellite.id}
