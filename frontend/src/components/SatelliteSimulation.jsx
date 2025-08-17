@@ -17,18 +17,68 @@ import { useToast } from '../hooks/use-toast';
 const SatelliteSimulation = () => {
   const [isPlaying, setIsPlaying] = useState(true);
   const [timeSpeed, setTimeSpeed] = useState(1);
-  const [selectedSatellite, setSelectedSatellite] = useState(mockSatellites[0]);
+  const [satellites, setSatellites] = useState([]);
+  const [selectedSatellite, setSelectedSatellite] = useState(null);
   const [showInfo, setShowInfo] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [configurations, setConfigurations] = useState([]);
   const [customParams, setCustomParams] = useState({
-    altitude: selectedSatellite?.altitude || 408,
-    inclination: selectedSatellite?.inclination || 51.6,
-    eccentricity: selectedSatellite?.eccentricity || 0.0002
+    altitude: 408,
+    inclination: 51.6,
+    eccentricity: 0.0002
   });
   const [currentTime, setCurrentTime] = useState(0);
   const [trackingSatellite, setTrackingSatellite] = useState(null);
   
   const { toast } = useToast();
   const animationRef = useRef();
+
+  // Load satellites and configurations on mount
+  useEffect(() => {
+    loadSatellites();
+    loadConfigurations();
+  }, []);
+
+  // Update custom params when selected satellite changes
+  useEffect(() => {
+    if (selectedSatellite) {
+      setCustomParams({
+        altitude: selectedSatellite.altitude,
+        inclination: selectedSatellite.inclination,
+        eccentricity: selectedSatellite.eccentricity
+      });
+    }
+  }, [selectedSatellite]);
+
+  const loadSatellites = async () => {
+    try {
+      setLoading(true);
+      const satelliteData = await SatelliteAPI.getSatellites();
+      setSatellites(satelliteData);
+      if (satelliteData.length > 0 && !selectedSatellite) {
+        setSelectedSatellite(satelliteData[0]);
+      }
+    } catch (err) {
+      setError('Failed to load satellites');
+      toast({
+        title: "Error",
+        description: "Failed to load satellite data",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadConfigurations = async () => {
+    try {
+      const configData = await SatelliteAPI.getConfigurations();
+      setConfigurations(configData);
+    } catch (err) {
+      console.error('Failed to load configurations:', err);
+    }
+  };
 
   // Animation loop
   useEffect(() => {
