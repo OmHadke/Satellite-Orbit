@@ -253,7 +253,7 @@ const SatelliteSimulation = () => {
           <Earth3D />
           
           {/* Satellites and their orbits */}
-          {mockSatellites.map((satellite) => {
+          {satellites.map((satellite) => {
             const isSelected = selectedSatellite?.id === satellite.id;
             const position = calculateOrbitalPosition(
               satellite, 
