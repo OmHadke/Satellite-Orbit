@@ -7,9 +7,9 @@ const Earth3D = () => {
 
   // Create a simple blue-green Earth material without external textures
   const earthMaterial = {
-    color: '#4a90e2',
-    transparent: true,
-    opacity: 0.9
+    color: '#2563eb',
+    transparent: false,
+    opacity: 1
   };
 
   // Rotate Earth slowly
