@@ -96,8 +96,9 @@ const SatelliteSimulation = () => {
       {/* 3D Visualization */}
       <div className="h-screen">
         <Canvas camera={{ position: [15, 15, 15], fov: 60 }}>
-          <ambientLight intensity={0.4} />
-          <pointLight position={[10, 10, 10]} intensity={1} />
+          <ambientLight intensity={0.6} />
+          <pointLight position={[10, 10, 10]} intensity={1.5} />
+          <pointLight position={[-10, -10, -10]} intensity={0.5} color="#ffffff" />
           <Stars radius={300} depth={60} count={3000} factor={4} saturation={0} fade speed={1} />
           
           {/* Earth */}
