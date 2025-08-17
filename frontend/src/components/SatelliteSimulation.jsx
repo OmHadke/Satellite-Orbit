@@ -101,26 +101,95 @@ const SatelliteSimulation = () => {
     };
   }, [isPlaying, timeSpeed]);
 
-  const handleSatelliteSelect = (satelliteId) => {
-    const satellite = mockSatellites.find(s => s.id === satelliteId);
-    setSelectedSatellite(satellite);
-    setCustomParams({
-      altitude: satellite.altitude,
-      inclination: satellite.inclination,
-      eccentricity: satellite.eccentricity
-    });
-    toast({
-      title: "Satellite Selected",
-      description: `Now viewing: ${satellite.name}`,
-    });
+  const handleSatelliteSelect = async (satelliteId) => {
+    const satellite = satellites.find(s => s.id === satelliteId);
+    if (satellite) {
+      setSelectedSatellite(satellite);
+      setCustomParams({
+        altitude: satellite.altitude,
+        inclination: satellite.inclination,
+        eccentricity: satellite.eccentricity
+      });
+      toast({
+        title: "Satellite Selected",
+        description: `Now viewing: ${satellite.name}`,
+      });
+    }
   };
 
-  const handleTrackSatellite = (satellite) => {
-    setTrackingSatellite(satellite);
-    toast({
-      title: "Tracking Enabled",
-      description: `Camera following: ${satellite.name}`,
-    });
+  const handleTrackSatellite = async (satellite) => {
+    try {
+      await SatelliteAPI.startTrackingSatellite(satellite.id);
+      setTrackingSatellite(satellite);
+      toast({
+        title: "Tracking Enabled",
+        description: `Camera following: ${satellite.name}`,
+      });
+    } catch (err) {
+      toast({
+        title: "Tracking Error",
+        description: "Failed to start satellite tracking",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleSaveConfiguration = async () => {
+    if (!selectedSatellite) return;
+    
+    try {
+      const configName = `Config ${new Date().toLocaleString()}`;
+      await SatelliteAPI.saveConfiguration({
+        name: configName,
+        description: `Saved configuration for ${selectedSatellite.name}`,
+        satellite_params: customParams,
+        time_speed: timeSpeed,
+        selected_satellite_id: selectedSatellite.id
+      });
+      
+      loadConfigurations(); // Reload configurations
+      toast({
+        title: "Configuration Saved",
+        description: `Saved as: ${configName}`,
+      });
+    } catch (err) {
+      toast({
+        title: "Save Error",
+        description: "Failed to save configuration",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleParameterChange = async (param, value) => {
+    const newParams = { ...customParams, [param]: value };
+    
+    // Validate parameters
+    const validation = validateOrbitalParameters(
+      newParams.altitude,
+      newParams.inclination,
+      newParams.eccentricity
+    );
+    
+    if (!validation.valid && validation.errors.length > 0) {
+      toast({
+        title: "Invalid Parameters",
+        description: validation.errors[0],
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setCustomParams(newParams);
+    
+    // Optional: Update satellite in backend
+    if (selectedSatellite) {
+      try {
+        await SatelliteAPI.updateSatellite(selectedSatellite.id, { [param]: value });
+      } catch (err) {
+        console.error('Failed to update satellite:', err);
+      }
+    }
   };
 
   const resetSimulation = () => {
