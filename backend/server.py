@@ -28,6 +28,12 @@ db = client[os.environ['DB_NAME']]
 # Create the main app
 app = FastAPI(title="Satellite Orbit Simulation API")
 
+#HEALTH
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
+
+
 # Create API router
 api_router = APIRouter(prefix="/api")
 
