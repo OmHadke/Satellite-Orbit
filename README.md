@@ -1,6 +1,3 @@
-# Here are your Instructions
-## 🎯 **What You Have:**
-
 **A professional-grade 3D Satellite Orbit Simulation & Visualization Tool** that could be used for:
 - **Educational purposes** - Teaching orbital mechanics
 - **Mission planning** - Visualizing satellite deployments
@@ -122,12 +119,6 @@ You will use this as `MONGO_URL` on Render.
 
 5) Deploy the service and note your backend URL, e.g.
    `https://your-backend.onrender.com`.
-
-**Troubleshooting Render start errors**
-- If you set **Root Directory** to `backend`, use this **Start Command**:
-  `uvicorn server:app --host 0.0.0.0 --port 8000`
-- If you keep the **Root Directory** at repo root, use:
-  `uvicorn backend.server:app --host 0.0.0.0 --port 8000`
 
 ### C) Vercel (Frontend)
 **Tools:** Vercel Project + Build pipeline

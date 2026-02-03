@@ -2,109 +2,40 @@ from functools import lru_cache
 from pathlib import Path
 from typing import List
 
-from pydantic import AliasChoices, Field, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, model_validator
+from pydantic_settings import BaseSettings
 
 ROOT_DIR = Path(__file__).resolve().parent
 
 
 class Settings(BaseSettings):
-    mongo_url: str = Field(
-        ...,
-        validation_alias=AliasChoices("MONGO_URL", "mongo_url"),
-    )
-    db_name: str = Field(
-        ...,
-        validation_alias=AliasChoices("MONGO_DB", "DB_NAME", "db_name"),
-    )
-    allowed_origins: List[str] = Field(
-        default_factory=list,
-        validation_alias=AliasChoices("ALLOWED_ORIGINS", "CORS_ORIGINS", "allowed_origins"),
-    )
-    allow_credentials: bool = Field(
-        False,
-        validation_alias=AliasChoices("ALLOW_CREDENTIALS", "allow_credentials"),
-    )
-    log_level: str = Field(
-        "INFO",
-        validation_alias=AliasChoices("LOG_LEVEL", "log_level"),
-    )
-    max_page_size: int = Field(
-        500,
-        validation_alias=AliasChoices("MAX_PAGE_SIZE", "max_page_size"),
-    )
-    default_page_size: int = Field(
-        100,
-        validation_alias=AliasChoices("DEFAULT_PAGE_SIZE", "default_page_size"),
-    )
+    mongo_url: str = Field(..., env="MONGO_URL")
+    db_name: str = Field(..., env="DB_NAME")
+    allowed_origins: List[str] = Field(default_factory=list, env="ALLOWED_ORIGINS")
+    allow_credentials: bool = Field(False, env="ALLOW_CREDENTIALS")
+    log_level: str = Field("INFO", env="LOG_LEVEL")
+    max_page_size: int = Field(500, env="MAX_PAGE_SIZE")
+    default_page_size: int = Field(100, env="DEFAULT_PAGE_SIZE")
     mongo_server_selection_timeout_ms: int = Field(
-        5000,
-        validation_alias=AliasChoices(
-            "MONGO_SERVER_SELECTION_TIMEOUT_MS",
-            "mongo_server_selection_timeout_ms",
-        ),
+        5000, env="MONGO_SERVER_SELECTION_TIMEOUT_MS"
     )
-    auth_enabled: bool = Field(
-        True,
-        validation_alias=AliasChoices("AUTH_ENABLED", "auth_enabled"),
-    )
-    jwt_secret: str = Field(
-        "change-me",
-        validation_alias=AliasChoices("JWT_SECRET", "jwt_secret"),
-    )
-    jwt_secret_file: str = Field(
-        "",
-        validation_alias=AliasChoices("JWT_SECRET_FILE", "jwt_secret_file"),
-    )
-    jwt_algorithm: str = Field(
-        "HS256",
-        validation_alias=AliasChoices("JWT_ALGORITHM", "jwt_algorithm"),
-    )
-    jwt_audience: str = Field(
-        "",
-        validation_alias=AliasChoices("JWT_AUDIENCE", "jwt_audience"),
-    )
-    jwt_issuer: str = Field(
-        "",
-        validation_alias=AliasChoices("JWT_ISSUER", "jwt_issuer"),
-    )
-    jwt_required_roles: List[str] = Field(
-        default_factory=list,
-        validation_alias=AliasChoices("JWT_REQUIRED_ROLES", "jwt_required_roles"),
-    )
-    rate_limit_default: str = Field(
-        "100/minute",
-        validation_alias=AliasChoices("RATE_LIMIT_DEFAULT", "rate_limit_default"),
-    )
-    rate_limit_auth: str = Field(
-        "20/minute",
-        validation_alias=AliasChoices("RATE_LIMIT_AUTH", "rate_limit_auth"),
-    )
-    metrics_enabled: bool = Field(
-        True,
-        validation_alias=AliasChoices("METRICS_ENABLED", "metrics_enabled"),
-    )
-    otel_enabled: bool = Field(
-        False,
-        validation_alias=AliasChoices("OTEL_ENABLED", "otel_enabled"),
-    )
-    otel_service_name: str = Field(
-        "satellite-orbit-api",
-        validation_alias=AliasChoices("OTEL_SERVICE_NAME", "otel_service_name"),
-    )
-    otel_exporter_otlp_endpoint: str = Field(
-        "",
-        validation_alias=AliasChoices(
-            "OTEL_EXPORTER_OTLP_ENDPOINT",
-            "otel_exporter_otlp_endpoint",
-        ),
-    )
+    auth_enabled: bool = Field(True, env="AUTH_ENABLED")
+    jwt_secret: str = Field("change-me", env="JWT_SECRET")
+    jwt_secret_file: str = Field("", env="JWT_SECRET_FILE")
+    jwt_algorithm: str = Field("HS256", env="JWT_ALGORITHM")
+    jwt_audience: str = Field("", env="JWT_AUDIENCE")
+    jwt_issuer: str = Field("", env="JWT_ISSUER")
+    jwt_required_roles: List[str] = Field(default_factory=list, env="JWT_REQUIRED_ROLES")
+    rate_limit_default: str = Field("100/minute", env="RATE_LIMIT_DEFAULT")
+    rate_limit_auth: str = Field("20/minute", env="RATE_LIMIT_AUTH")
+    metrics_enabled: bool = Field(True, env="METRICS_ENABLED")
+    otel_enabled: bool = Field(False, env="OTEL_ENABLED")
+    otel_service_name: str = Field("satellite-orbit-api", env="OTEL_SERVICE_NAME")
+    otel_exporter_otlp_endpoint: str = Field("", env="OTEL_EXPORTER_OTLP_ENDPOINT")
 
-    model_config = SettingsConfigDict(
-        env_file=ROOT_DIR / ".env",
-        case_sensitive=True,
-        extra="ignore",
-    )
+    class Config:
+        env_file = ROOT_DIR / ".env"
+        case_sensitive = True
 
     @classmethod
     def parse_env_var(cls, field_name: str, raw_value: str):
