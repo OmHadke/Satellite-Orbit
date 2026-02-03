@@ -1,6 +1,3 @@
-# Here are your Instructions
-## 🎯 **What You Have:**
-
 **A professional-grade 3D Satellite Orbit Simulation & Visualization Tool** that could be used for:
 - **Educational purposes** - Teaching orbital mechanics
 - **Mission planning** - Visualizing satellite deployments
