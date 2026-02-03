@@ -1,9 +1,18 @@
 import math
-from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional
-from models import Satellite, SatellitePosition, Position, Velocity
+from typing import Any, Dict, List, Optional
+
+from models import Position, Satellite, Velocity
 
 class SatelliteService:
+
+    @staticmethod
+    def calculate_orbital_period_minutes(altitude: float) -> float:
+        """Calculate orbital period based on altitude in km."""
+        earth_radius = 6371  # km
+        mu = 398600.4418  # Earth's gravitational parameter (km³/s²)
+        semi_major_axis = earth_radius + altitude
+        period_seconds = 2 * math.pi * ((semi_major_axis ** 3 / mu) ** 0.5)
+        return period_seconds / 60
     
     @staticmethod
     def calculate_orbital_position(satellite: Satellite, time_seconds: float, custom_params: Optional[Dict] = None) -> Position:
@@ -16,7 +25,10 @@ class SatelliteService:
         total_radius = earth_radius + params['altitude']
         
         # Convert period from minutes to seconds
-        period_seconds = params.get('period', satellite.period) * 60
+        period_minutes = params.get('period', satellite.period)
+        if period_minutes <= 0:
+            period_minutes = SatelliteService.calculate_orbital_period_minutes(params['altitude'])
+        period_seconds = period_minutes * 60
         
         # Calculate mean motion (radians per second)
         mean_motion = (2 * math.pi) / period_seconds
@@ -62,7 +74,10 @@ class SatelliteService:
         # Convert to scene coordinates
         scale = 5 / earth_radius
         
-        period_seconds = params.get('period', satellite.period) * 60
+        period_minutes = params.get('period', satellite.period)
+        if period_minutes <= 0:
+            period_minutes = SatelliteService.calculate_orbital_period_minutes(params['altitude'])
+        period_seconds = period_minutes * 60
         angular_velocity = (2 * math.pi) / period_seconds
         
         # Calculate velocity components (simplified)
@@ -82,7 +97,10 @@ class SatelliteService:
             params.update(custom_params)
             
         path_points = []
-        period_seconds = params.get('period', satellite.period) * 60
+        period_minutes = params.get('period', satellite.period)
+        if period_minutes <= 0:
+            period_minutes = SatelliteService.calculate_orbital_period_minutes(params['altitude'])
+        period_seconds = period_minutes * 60
         time_step = period_seconds / points
         
         for i in range(points):
