@@ -1,6 +1,8 @@
 import axios from 'axios';
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const envBackendUrl = process.env.REACT_APP_BACKEND_URL;
+const runtimeBackendUrl = typeof window !== 'undefined' ? window.location.origin : '';
+const BACKEND_URL = envBackendUrl || runtimeBackendUrl;
 const API = `${BACKEND_URL}/api`;
 
 class SatelliteAPI {
