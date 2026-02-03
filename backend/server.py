@@ -1,12 +1,11 @@
-from fastapi import FastAPI, APIRouter, HTTPException
-from dotenv import load_dotenv
-from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
-import os
 import logging
-from pathlib import Path
-from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime
+from typing import Optional
+
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request
+from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo.errors import PyMongoError
+from starlette.middleware.cors import CORSMiddleware
 
 # Import models and services
 from models import (
@@ -16,22 +15,59 @@ from models import (
     Preferences, PreferencesUpdate
 )
 from satellite_service import SatelliteService
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
-ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+from auth import get_current_user, require_roles
+from config import get_settings
+from metrics import metrics_middleware, metrics_response
+from telemetry import configure_telemetry
+
+settings = get_settings()
 
 # MongoDB connection
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+client = AsyncIOMotorClient(
+    settings.mongo_url,
+    serverSelectionTimeoutMS=settings.mongo_server_selection_timeout_ms,
+)
+db = client[settings.db_name]
 
 # Create the main app
 app = FastAPI(title="Satellite Orbit Simulation API")
+configure_telemetry(app)
+limiter = Limiter(key_func=get_remote_address, default_limits=[settings.rate_limit_default])
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+if settings.metrics_enabled:
+    app.middleware("http")(metrics_middleware)
 
 #HEALTH
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
+
+
+@app.get("/health/live")
+def health_live():
+    return {"status": "alive", "timestamp": datetime.utcnow()}
+
+
+@app.get("/health/ready")
+@limiter.limit(settings.rate_limit_default)
+async def health_ready(request: Request):
+    try:
+        await db.command("ping")
+    except PyMongoError as exc:
+        raise HTTPException(status_code=503, detail="Database unavailable") from exc
+    return {"status": "ready", "timestamp": datetime.utcnow()}
+
+
+@app.get("/metrics")
+def metrics():
+    if not settings.metrics_enabled:
+        raise HTTPException(status_code=404, detail="Metrics disabled")
+    return metrics_response()
 
 
 # Create API router
@@ -42,12 +78,16 @@ satellite_service = SatelliteService()
 
 # Satellite endpoints
 @api_router.get("/satellites", response_model=SatelliteListResponse)
-async def get_satellites():
+@limiter.limit(settings.rate_limit_default)
+async def get_satellites(
+    request: Request,
+    limit: int = Query(settings.default_page_size, ge=1, le=settings.max_page_size)
+):
     """Get all satellites"""
     try:
         # Try to get from database first
-        satellites_cursor = db.satellites.find()
-        satellites_data = await satellites_cursor.to_list(100)
+        satellites_cursor = db.satellites.find().limit(limit)
+        satellites_data = await satellites_cursor.to_list(limit)
         
         # If no satellites in DB, initialize with defaults
         if not satellites_data:
@@ -58,8 +98,8 @@ async def get_satellites():
                 await db.satellites.insert_one(satellite.dict())
             
             # Fetch again after initialization
-            satellites_cursor = db.satellites.find()
-            satellites_data = await satellites_cursor.to_list(100)
+            satellites_cursor = db.satellites.find().limit(limit)
+            satellites_data = await satellites_cursor.to_list(limit)
         
         satellites = [Satellite(**sat_data) for sat_data in satellites_data]
         return SatelliteListResponse(satellites=satellites)
@@ -69,7 +109,8 @@ async def get_satellites():
         raise HTTPException(status_code=500, detail="Failed to fetch satellites")
 
 @api_router.get("/satellites/{satellite_id}")
-async def get_satellite(satellite_id: str):
+@limiter.limit(settings.rate_limit_default)
+async def get_satellite(request: Request, satellite_id: str):
     """Get specific satellite by ID"""
     satellite_data = await db.satellites.find_one({"id": satellite_id})
     if not satellite_data:
@@ -78,8 +119,12 @@ async def get_satellite(satellite_id: str):
     satellite = Satellite(**satellite_data)
     return {"satellite": satellite}
 
-@api_router.post("/satellites/custom")
-async def create_custom_satellite(satellite_data: SatelliteCreate):
+@api_router.post(
+    "/satellites/custom",
+    dependencies=[Depends(require_roles(settings.jwt_required_roles))],
+)
+@limiter.limit(settings.rate_limit_auth)
+async def create_custom_satellite(request: Request, satellite_data: SatelliteCreate):
     """Create a custom satellite configuration"""
     # Validate orbital parameters
     validation = satellite_service.validate_orbital_parameters(
@@ -100,8 +145,14 @@ async def create_custom_satellite(satellite_data: SatelliteCreate):
     
     return {"satellite": satellite, "id": satellite.id}
 
-@api_router.put("/satellites/{satellite_id}")
-async def update_satellite(satellite_id: str, updates: SatelliteUpdate):
+@api_router.put(
+    "/satellites/{satellite_id}",
+    dependencies=[Depends(require_roles(settings.jwt_required_roles))],
+)
+@limiter.limit(settings.rate_limit_auth)
+async def update_satellite(
+    request: Request, satellite_id: str, updates: SatelliteUpdate
+):
     """Update satellite parameters"""
     satellite_data = await db.satellites.find_one({"id": satellite_id})
     if not satellite_data:
@@ -148,22 +199,32 @@ async def update_satellite(satellite_id: str, updates: SatelliteUpdate):
 
 # Configuration endpoints
 @api_router.get("/configurations", response_model=ConfigurationListResponse)
-async def get_configurations():
+@limiter.limit(settings.rate_limit_default)
+async def get_configurations(request: Request):
     """Get all saved configurations"""
-    configs_cursor = db.configurations.find().sort("saved_at", -1)
-    configs_data = await configs_cursor.to_list(100)
+    configs_cursor = db.configurations.find().sort("saved_at", -1).limit(
+        settings.default_page_size
+    )
+    configs_data = await configs_cursor.to_list(settings.default_page_size)
     configurations = [Configuration(**config_data) for config_data in configs_data]
     return ConfigurationListResponse(configurations=configurations)
 
-@api_router.post("/configurations")
-async def save_configuration(config_data: ConfigurationCreate):
+@api_router.post(
+    "/configurations", dependencies=[Depends(require_roles(settings.jwt_required_roles))]
+)
+@limiter.limit(settings.rate_limit_auth)
+async def save_configuration(request: Request, config_data: ConfigurationCreate):
     """Save current simulation configuration"""
     configuration = Configuration(**config_data.dict())
     await db.configurations.insert_one(configuration.dict())
     return {"configuration": configuration, "id": configuration.id}
 
-@api_router.delete("/configurations/{config_id}")
-async def delete_configuration(config_id: str):
+@api_router.delete(
+    "/configurations/{config_id}",
+    dependencies=[Depends(require_roles(settings.jwt_required_roles))],
+)
+@limiter.limit(settings.rate_limit_auth)
+async def delete_configuration(request: Request, config_id: str):
     """Delete a saved configuration"""
     result = await db.configurations.delete_one({"id": config_id})
     if result.deleted_count == 0:
@@ -172,11 +233,13 @@ async def delete_configuration(config_id: str):
 
 # Position tracking endpoints
 @api_router.get("/satellites/{satellite_id}/positions")
+@limiter.limit(settings.rate_limit_default)
 async def get_satellite_positions(
+    request: Request,
     satellite_id: str,
     start: Optional[datetime] = None,
     end: Optional[datetime] = None,
-    limit: int = 100
+    limit: int = Query(settings.default_page_size, ge=1, le=settings.max_page_size)
 ):
     """Get historical satellite positions"""
     query = {"satellite_id": satellite_id}
@@ -194,8 +257,12 @@ async def get_satellite_positions(
     
     return PositionListResponse(positions=positions)
 
-@api_router.post("/satellites/{satellite_id}/track")
-async def start_tracking_satellite(satellite_id: str):
+@api_router.post(
+    "/satellites/{satellite_id}/track",
+    dependencies=[Depends(require_roles(settings.jwt_required_roles))],
+)
+@limiter.limit(settings.rate_limit_auth)
+async def start_tracking_satellite(request: Request, satellite_id: str):
     """Start tracking satellite positions"""
     # Verify satellite exists
     satellite_data = await db.satellites.find_one({"id": satellite_id})
@@ -207,14 +274,18 @@ async def start_tracking_satellite(satellite_id: str):
 
 # Preferences endpoints
 @api_router.get("/preferences")
-async def get_preferences():
+@limiter.limit(settings.rate_limit_default)
+async def get_preferences(request: Request):
     """Get user preferences"""
     prefs_data = await db.preferences.find_one() or {}
     preferences = Preferences(**prefs_data) if prefs_data else Preferences()
     return {"preferences": preferences}
 
-@api_router.put("/preferences")
-async def update_preferences(updates: PreferencesUpdate):
+@api_router.put(
+    "/preferences", dependencies=[Depends(require_roles(settings.jwt_required_roles))]
+)
+@limiter.limit(settings.rate_limit_auth)
+async def update_preferences(request: Request, updates: PreferencesUpdate):
     """Update user preferences"""
     update_dict = {k: v for k, v in updates.dict().items() if v is not None}
     update_dict["updated_at"] = datetime.utcnow()
@@ -232,7 +303,8 @@ async def update_preferences(updates: PreferencesUpdate):
 
 # Utility endpoints
 @api_router.get("/satellites/{satellite_id}/orbit-path")
-async def get_orbit_path(satellite_id: str, points: int = 100):
+@limiter.limit(settings.rate_limit_default)
+async def get_orbit_path(request: Request, satellite_id: str, points: int = 100):
     """Get orbital path for visualization"""
     satellite_data = await db.satellites.find_one({"id": satellite_id})
     if not satellite_data:
@@ -247,7 +319,10 @@ async def get_orbit_path(satellite_id: str, points: int = 100):
     }
 
 @api_router.post("/validate-orbital-params")
-async def validate_orbital_params(altitude: float, inclination: float, eccentricity: float):
+@limiter.limit(settings.rate_limit_default)
+async def validate_orbital_params(
+    request: Request, altitude: float, inclination: float, eccentricity: float
+):
     """Validate orbital parameters"""
     validation = satellite_service.validate_orbital_parameters(altitude, inclination, eccentricity)
     return validation
@@ -262,20 +337,37 @@ async def health_check():
 app.include_router(api_router)
 
 # Add CORS middleware
+cors_allow_origins = settings.allowed_origins or ["*"]
+cors_allow_credentials = settings.allow_credentials
+if "*" in cors_allow_origins and cors_allow_credentials:
+    logging.warning(
+        "CORS allow_credentials is incompatible with wildcard origins; disabling credentials."
+    )
+    cors_allow_credentials = False
+
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=["*"],
+    allow_credentials=cors_allow_credentials,
+    allow_origins=cors_allow_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, settings.log_level.upper(), logging.INFO),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+@app.on_event("startup")
+async def startup_db_client():
+    try:
+        await db.command("ping")
+        logger.info("Connected to MongoDB")
+    except PyMongoError as exc:
+        logger.error("Failed to connect to MongoDB", exc_info=exc)
+        raise
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
